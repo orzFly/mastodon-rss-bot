@@ -1,0 +1,18 @@
+package: .
+import:
+- package: github.com/fabioberger/airtable-go
+- package: github.com/mattn/go-mastodon
+- package: github.com/PuerkitoBio/goquery
+  version: ~1.1.0
+- package: github.com/andybalholm/cascadia
+- package: golang.org/x/net
+  subpackages:
+  - html
+- package: github.com/jmcvetta/randutil
+- package: github.com/vincent-petithory/dataurl
+- package: github.com/mmcdole/gofeed
+- package: github.com/mmcdole/goxpp
+- package: golang.org/x/text
+  subpackages:
+  - encoding
+  - transform
