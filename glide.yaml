@@ -2,9 +2,9 @@ package: .
 import:
 - package: github.com/fabioberger/airtable-go
 - package: github.com/mattn/go-mastodon
-  vcs: git
   version: c9a6022f50bbf733cc193cb057d91c64c0b798fb
   repo: git@github.com:orzFly/go-mastodon.git
+  vcs: git
 - package: github.com/PuerkitoBio/goquery
   version: ~1.1.0
 - package: github.com/andybalholm/cascadia
@@ -19,3 +19,4 @@ import:
   subpackages:
   - encoding
   - transform
+- package: github.com/knq/baseconv

@@ -1,5 +1,5 @@
-hash: 4ece33b67d8e0bcf89856e74fa8b416c2f6bb5d1c9333d6fd1f4a0a633e37d51
-updated: 2017-04-24T00:00:37.7246892+08:00
+hash: b315439a4dddead9aa8157fcb88c49fd99d221601c4a791fd29e2826346db9cf
+updated: 2017-04-24T01:52:23.5903935+08:00
 imports:
 - name: github.com/andybalholm/cascadia
   version: 349dd0209470eabd9514242c688c403c0926d266
@@ -9,6 +9,8 @@ imports:
   - utils
 - name: github.com/jmcvetta/randutil
   version: 2bb1b664bcff821e02b2a0644cd29c7e824d54f8
+- name: github.com/knq/baseconv
+  version: a76a6ad7af9f82f25f2d43002e728c585d8b8073
 - name: github.com/mattn/go-mastodon
   version: c9a6022f50bbf733cc193cb057d91c64c0b798fb
   repo: git@github.com:orzFly/go-mastodon.git

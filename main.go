@@ -2,13 +2,20 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/fabioberger/airtable-go"
 	"github.com/jmcvetta/randutil"
+	"github.com/knq/baseconv"
 	"github.com/mattn/go-mastodon"
 	"github.com/mmcdole/gofeed"
 	"github.com/vincent-petithory/dataurl"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
 	"io/ioutil"
 	"net/http"
 	"net/http/cookiejar"
@@ -19,10 +26,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	_ "image/jpeg"
-	_ "image/png"
-	_ "image/gif"
-	"image"
 )
 
 type Bot struct {
@@ -87,7 +90,7 @@ func (bot *Bot) Process() map[string]interface{} {
 		return updatedFields
 	}
 
-	fmt.Printf("%#v\n", bot)
+	fmt.Printf("Bot Status Fetched: %#v\n", bot)
 
 	if bot.Fields.BotApplicationClientId == "" {
 		app, err := mastodon.RegisterApp(ctx, &mastodon.AppConfig{
@@ -209,7 +212,7 @@ func (bot *Bot) Process() map[string]interface{} {
 		}
 
 		{
-			resp, err := http.Get(bot.Fields.RSSUrl)
+			resp, err := http.Get(Protocol(bot.Fields.RSSUrl))
 			if err != nil {
 				panic(err)
 			}
@@ -226,108 +229,23 @@ func (bot *Bot) Process() map[string]interface{} {
 			lastGuids := strings.Split(bot.Fields.RSSLastGUIDs, "||||")
 
 			for _, item := range feed.Items {
-				fmt.Printf("%#v\n", item)
+				thisGuid, err := CreateGUID(bot.Fields.RSSUrl, item)
+				if err != nil {
+					panic(err)
+				}
 
-				if stringInSlice(item.Link, lastGuids) {
+				if stringInSlice(*thisGuid, lastGuids) {
+					fmt.Printf("Duplicated Item: %s\n", *thisGuid)
 					continue
 				}
-				lastGuids = append(lastGuids, item.Link)
+				fmt.Printf("New Item: %s\n", *thisGuid)
+				lastGuids = append(lastGuids, *thisGuid)
 
-				doc, err := goquery.NewDocumentFromReader(strings.NewReader(item.Description))
+				toot, err := CreateToot(bot.Fields.RSSUrl, item, c, &ctx)
 				if err != nil {
 					panic(err)
 				}
-
-				text := doc.Text()
-				text = regexp.MustCompile("\\r\\n").ReplaceAllLiteralString(text, "\n")
-				text = regexp.MustCompile("\\s{2,}").ReplaceAllLiteralString(text, " ")
-
-				loc, err := time.LoadLocation("Asia/Shanghai")
-				if err != nil {
-					panic(err)
-				}
-
-				fmt.Printf(text)
-
-				mediaIds := make([]int64, 0)
-				extraCount := 0
-
-				doc.Find(".wgt_img").Each(func(i int, s *goquery.Selection) {
-					if len(mediaIds) == 4 {
-						extraCount += 1
-						return
-					}
-
-					src := s.AttrOr("src", "")
-					fmt.Printf("%#v\n", src)
-
-					file, err := ioutil.TempFile(os.TempDir(), "mastodon-rss-bot")
-					if err != nil {
-						panic(err)
-					}
-
-					tmp := file.Name()
-
-					resp, err := http.Get(src)
-					if err != nil {
-						panic(err)
-					}
-					defer resp.Body.Close()
-
-					data, err := ioutil.ReadAll(resp.Body)
-					if err != nil {
-						panic(err)
-					}
-
-					_, err = file.Write(data)
-					if err != nil {
-						panic(err)
-					}
-
-					err = file.Close()
-					if err != nil {
-						panic(err)
-					}
-
-					fmt.Printf("%s\n", tmp)
-
-					width, height := getImageDimension(tmp)
-
-					if width * height != 0 {
-						if height / width > 1920 / 720 {
-							text += "\n📜" + src
-							return
-						}
-					}
-
-					attach, err := c.UploadMedia(ctx, tmp)
-					if err != nil {
-						panic(err)
-					}
-
-					fmt.Printf("%#v\n", attach)
-					text += "\n🖼️" + src //attach.TextURL
-					mediaIds = append(mediaIds, attach.ID)
-
-					err = os.Remove(tmp)
-					if err != nil {
-						panic(err)
-					}
-				})
-
-				if extraCount > 0 {
-					text += "\n..🖼️+️" + strconv.FormatInt(int64(extraCount), 10)
-				}
-				text += "\n🔗" + item.Link
-				text += "\n⏰" + item.PublishedParsed.In(loc).Format("2006-01-02 15:04:05")
-				text += "\n"
-
-				toot := &mastodon.Toot{
-					Status:   text,
-					MediaIDs: mediaIds,
-					Visibility: "unlisted",
-				}
-				fmt.Printf("%#v\n", toot)
+				fmt.Printf("Generated Toot: %#v\n", toot)
 
 				_, err = c.PostStatus(ctx, toot)
 				if err != nil {
@@ -349,16 +267,187 @@ func (bot *Bot) Process() map[string]interface{} {
 			}
 
 			lastGuids = lastGuids[firstGuidItem:]
-			bot.Fields.RSSLastGUIDs = strings.Join(lastGuids, "||||")
-			updatedFields["RSSLastGUIDs"] = bot.Fields.RSSLastGUIDs
+			combined := strings.Join(lastGuids, "||||")
+			if bot.Fields.RSSLastGUIDs != combined {
+				bot.Fields.RSSLastGUIDs = combined
+				updatedFields["RSSLastGUIDs"] = combined
+			}
 
 			bot.Fields.LastCheckedAt = time.Now().UTC().Format(time.RFC3339)
 			updatedFields["LastCheckedAt"] = bot.Fields.LastCheckedAt
 		}
 	}
 
-	fmt.Printf("%#v\n", updatedFields)
+	fmt.Printf("Bot Status Update: %#v\n", updatedFields)
 	return updatedFields
+}
+
+func IsWeibo(url string) bool {
+	return url[0:len("weibo:")] == "weibo:"
+}
+
+func Protocol(url string) string {
+	if IsWeibo(url) {
+		return ProtocolWeibo(url)
+	}
+	return url
+}
+
+func ProtocolWeibo(url string) string {
+	return "http://rss.weibodangan.com/weibo/rss/" + url[len("weibo:"):] + "/"
+}
+
+func CreateGUID(url string, item *gofeed.Item) (*string, error) {
+	if IsWeibo(url) {
+		return CreateGUIDWeibo(url, item)
+	}
+	return &item.GUID, nil
+}
+
+func WeiboMid2Murl(mid string) (*string, error) {
+	fullmid := leftPad2Len(mid, "0", 7*3)
+	p1, err := baseconv.Convert(fullmid[0:7], baseconv.DigitsDec, baseconv.Digits62)
+	if err != nil {
+		return nil, err
+	}
+	p2, err := baseconv.Convert(fullmid[7:14], baseconv.DigitsDec, baseconv.Digits62)
+	if err != nil {
+		return nil, err
+	}
+	p3, err := baseconv.Convert(fullmid[14:21], baseconv.DigitsDec, baseconv.Digits62)
+	if err != nil {
+		return nil, err
+	}
+	result := regexp.MustCompile(`^0+`).ReplaceAllLiteralString(p1+p2+p3, "")
+	return &result, nil
+}
+
+func CreateGUIDWeibo(url string, item *gofeed.Item) (*string, error) {
+	matches := regexp.MustCompile(`([0-9]+)/status([0-9]+)\.html`).FindStringSubmatch(item.GUID)
+	if len(matches) == 0 {
+		return nil, errors.New("cannot match guid: " + item.GUID)
+	}
+	uid := matches[1]
+	mid := matches[2]
+	murl, err := WeiboMid2Murl(mid)
+	if err != nil {
+		return nil, err
+	}
+
+	result := "http://weibo.com/" + uid + "/" + *murl
+	return &result, nil
+}
+
+func CreateToot(url string, item *gofeed.Item, client *mastodon.Client, ctx *context.Context) (*mastodon.Toot, error) {
+	if IsWeibo(url) {
+		return CreateTootWeibo(url, item, client, ctx)
+	}
+	panic("not implemented")
+}
+
+func CreateTootWeibo(url string, item *gofeed.Item, client *mastodon.Client, ctx *context.Context) (*mastodon.Toot, error) {
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(item.Description))
+	if err != nil {
+		return nil, err
+	}
+
+	text := doc.Text()
+	text = regexp.MustCompile("\\r\\n").ReplaceAllLiteralString(text, "\n")
+	text = regexp.MustCompile("\\s{2,}").ReplaceAllLiteralString(text, " ")
+
+	mediaIds := make([]int64, 0)
+
+	nodes := make([]*goquery.Selection, 0)
+	doc.Find("img[src*=\".sinaimg.cn/large/\"]").Each(func(i int, s *goquery.Selection) {
+		nodes = append(nodes, s)
+	})
+
+	for _, s := range nodes {
+		src := s.AttrOr("src", "")
+
+		shortUrl, err := ShortURLSina(src, ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		fmt.Printf("Processing Image: [%s] %s\n", *shortUrl, src)
+
+		file, err := ioutil.TempFile(os.TempDir(), "mastodon-rss-bot")
+		if err != nil {
+			return nil, err
+		}
+
+		tmp := file.Name()
+
+		resp, err := http.Get(src)
+		if err != nil {
+			return nil, err
+		}
+
+		data, err := ioutil.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = file.Write(data)
+		if err != nil {
+			return nil, err
+		}
+
+		err = file.Close()
+		if err != nil {
+			return nil, err
+		}
+
+		fmt.Printf("Downloaded Image to temp file: %s\n", tmp)
+
+		width, height := getImageDimension(tmp)
+
+		if width*height != 0 {
+			if height/width > 1920/720 {
+				text += "\n📜" + *shortUrl
+				continue
+			}
+		}
+		text += "\n🖼️" + *shortUrl
+
+		if len(mediaIds) == 4 {
+			continue
+		}
+
+		attach, err := client.UploadMedia(*ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+
+		fmt.Printf("Uploaded Attachment: %#v\n", attach)
+		mediaIds = append(mediaIds, attach.ID)
+
+		err = os.Remove(tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	link, err := CreateGUIDWeibo(url, item)
+	if err != nil {
+		return nil, err
+	}
+	text += "\n🔗" + *link
+
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		return nil, err
+	}
+
+	text += "\n⏰" + item.PublishedParsed.In(loc).Format("2006-01-02 15:04:05")
+
+	return &mastodon.Toot{
+		Status:     text,
+		MediaIDs:   mediaIds,
+		Visibility: "unlisted",
+	}, nil
 }
 
 func stringInSlice(a string, list []string) bool {
@@ -428,6 +517,37 @@ func RegisterMastodonUser(server string, token string, username string, password
 
 }
 
+func ShortURLSina(url string, ctx *context.Context) (*string, error) {
+	req, err := http.NewRequest("GET", "http://api.t.sina.com.cn/short_url/shorten.json", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	q := req.URL.Query()
+	q.Add("source", "3271760578")
+	q.Add("url_long", url)
+	req.URL.RawQuery = q.Encode()
+
+	client := &http.Client{}
+	res, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	j := make([]map[string]interface{}, 0)
+	err = json.Unmarshal(data, &j)
+	if err != nil {
+		return nil, err
+	}
+
+	short := j[0]["url_short"].(string)
+	return &short, nil
+}
 
 func getImageDimension(imagePath string) (int, int) {
 	file, err := os.Open(imagePath)
@@ -445,4 +565,19 @@ func getImageDimension(imagePath string) (int, int) {
 	}
 
 	return image.Width, image.Height
+}
+
+// https://github.com/DaddyOh/golang-samples/blob/master/pad.go
+func rightPad2Len(s string, padStr string, overallLen int) string {
+	var padCountInt int
+	padCountInt = 1 + ((overallLen - len(padStr)) / len(padStr))
+	var retStr = s + strings.Repeat(padStr, padCountInt)
+	return retStr[:overallLen]
+}
+
+func leftPad2Len(s string, padStr string, overallLen int) string {
+	var padCountInt int
+	padCountInt = 1 + ((overallLen - len(padStr)) / len(padStr))
+	var retStr = strings.Repeat(padStr, padCountInt) + s
+	return retStr[(len(retStr) - overallLen):]
 }
