@@ -1,8 +1,7 @@
 image: golang:1.8
 
 before_script:
-    - mkdir -p /go/src/git.orzfly.com/orzfly/mastodon-rss-bot
-    - ln -s "$PWD" /go/src/git.orzfly.com/orzfly/mastodon-rss-bot
+    - ln -s /builds /go/src/git.orzfly.com
     - cd /go/src/git.orzfly.com/orzfly/mastodon-rss-bot
     - go get github.com/Masterminds/glide
     - glide install
