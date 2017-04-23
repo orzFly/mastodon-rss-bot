@@ -306,7 +306,7 @@ func (bot *Bot) Process() map[string]interface{} {
 					}
 
 					fmt.Printf("%#v\n", attach)
-					text += "\n🖼️" + attach.TextURL
+					text += "\n🖼️" + src //attach.TextURL
 					mediaIds = append(mediaIds, attach.ID)
 
 					err = os.Remove(tmp)
@@ -325,6 +325,7 @@ func (bot *Bot) Process() map[string]interface{} {
 				toot := &mastodon.Toot{
 					Status:   text,
 					MediaIDs: mediaIds,
+					Visibility: "unlisted",
 				}
 				fmt.Printf("%#v\n", toot)
 
