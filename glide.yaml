@@ -3,7 +3,7 @@ import:
 - package: github.com/fabioberger/airtable-go
 - package: github.com/mattn/go-mastodon
   version: c9a6022f50bbf733cc193cb057d91c64c0b798fb
-  repo: git@github.com:orzFly/go-mastodon.git
+  repo: https://github.com/orzFly/go-mastodon.git
   vcs: git
 - package: github.com/PuerkitoBio/goquery
   version: ~1.1.0

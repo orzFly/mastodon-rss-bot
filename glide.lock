@@ -1,5 +1,5 @@
-hash: b315439a4dddead9aa8157fcb88c49fd99d221601c4a791fd29e2826346db9cf
-updated: 2017-04-24T01:52:23.5903935+08:00
+hash: e28e2c05cb83327223afa29c6f727d8a984bed4c9ff86586c37ee9cc55c46725
+updated: 2017-04-24T03:00:53.1421095+08:00
 imports:
 - name: github.com/andybalholm/cascadia
   version: 349dd0209470eabd9514242c688c403c0926d266
@@ -13,7 +13,7 @@ imports:
   version: a76a6ad7af9f82f25f2d43002e728c585d8b8073
 - name: github.com/mattn/go-mastodon
   version: c9a6022f50bbf733cc193cb057d91c64c0b798fb
-  repo: git@github.com:orzFly/go-mastodon.git
+  repo: https://github.com/orzFly/go-mastodon.git
   vcs: git
 - name: github.com/mmcdole/gofeed
   version: 042c0a9121581210fc8ef106d8ad1b0bdf931ae2
