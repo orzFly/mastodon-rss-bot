@@ -1,0 +1,35 @@
+image: golang:1.8
+
+before_script:
+    - mkdir -p /go/src/git.orzfly.com/orzfly/mastodon-rss-bot
+    - ln -s /builds /go/src/git.orzfly.com/orzfly/mastodon-rss-bot
+    - cd /go/src/git.orzfly.com/orzfly/mastodon-rss-bot
+    - go get github.com/Masterminds/glide
+    - glide install
+
+stages:
+    - build
+
+compile:
+    stage: build
+    script:
+    #- GOARCH=arm GOOS=linux     go build -o mastodon-rss-bot-linux-arm
+    #- GOARCH=386 GOOS=linux     go build -o mastodon-rss-bot-linux-386
+    #- GOARCH=386 GOOS=freebsd   go build -o mastodon-rss-bot-freebsd-386
+    #- GOARCH=386 GOOS=darwin    go build -o mastodon-rss-bot-darwin-386
+    #- GOARCH=386 GOOS=windows   go build -o mastodon-rss-bot-windows-386.exe
+    - GOARCH=amd64 GOOS=linux   go build -o mastodon-rss-bot-linux-amd64
+    #- GOARCH=amd64 GOOS=freebsd go build -o mastodon-rss-bot-freebsd-amd64
+    #- GOARCH=amd64 GOOS=darwin  go build -o mastodon-rss-bot-darwin-amd64
+    #- GOARCH=amd64 GOOS=windows go build -o mastodon-rss-bot-windows-amd64.exe
+    artifacts:
+        paths:
+        #- mastodon-rss-bot-linux-arm
+        #- mastodon-rss-bot-linux-386
+        #- mastodon-rss-bot-freebsd-386
+        #- mastodon-rss-bot-darwin-386
+        #- mastodon-rss-bot-windows-386.exe
+        - mastodon-rss-bot-linux-amd64
+        #- mastodon-rss-bot-freebsd-amd64
+        #- mastodon-rss-bot-darwin-amd64
+        #- mastodon-rss-bot-windows-amd64.exe
