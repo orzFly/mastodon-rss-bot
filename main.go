@@ -354,7 +354,10 @@ func WeiboMid2Murl(mid string) (*string, error) {
 func CreateGUIDWeibo(url string, item *gofeed.Item) (*string, error) {
 	matches := regexp.MustCompile(`([0-9]+)/status([0-9]+)\.html`).FindStringSubmatch(item.GUID)
 	if len(matches) == 0 {
-		return nil, errors.New("cannot match guid: " + item.GUID)
+		matches = regexp.MustCompile(`([0-9]+)/\?status=([0-9]+)#`).FindStringSubmatch(item.GUID)
+		if len(matches) == 0 {
+			return nil, errors.New("cannot match guid: " + item.GUID)
+		}
 	}
 	uid := matches[1]
 	mid := matches[2]
@@ -458,9 +461,11 @@ func CreateTootWeibo(url string, item *gofeed.Item, client *mastodon.Client, ctx
 
 		descs := make([]string, 0)
 		if filesize >= 1*1024*1024 {
-			descs = append(descs, humanize.BigIBytes(big.NewInt(int64(filesize))))
+			sizetext := humanize.BigIBytes(big.NewInt(int64(filesize)))
+			sizetext = regexp.MustCompile("iB$").ReplaceAllLiteralString(sizetext, "")
+			descs = append(descs, sizetext)
 		}
-		if friendMime != "JPEG" {
+		if friendMime != "JPEG" && friendMime != "GIF" {
 			descs = append(descs, friendMime)
 		}
 
@@ -473,11 +478,15 @@ func CreateTootWeibo(url string, item *gofeed.Item, client *mastodon.Client, ctx
 
 		if width*height != 0 {
 			if height/width > 1920/720 {
-				text += "\n📜" + *shortUrl + filedesc
+				text += "\n📃" + *shortUrl + filedesc
 				continue
 			}
 		}
-		text += "\n🖼️" + *shortUrl + filedesc
+		if friendMime == "GIF" {
+			text += "\n💈️" + *shortUrl + filedesc
+		} else {
+			text += "\n🏞️" + *shortUrl + filedesc
+		}
 
 		if len(mediaIds) == 4 {
 			continue
