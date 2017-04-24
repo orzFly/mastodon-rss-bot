@@ -31,6 +31,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 type Bot struct {
@@ -383,9 +384,12 @@ func CreateTootWeibo(url string, item *gofeed.Item, client *mastodon.Client, ctx
 		return nil, err
 	}
 
+	meta := ""
 	text := doc.Text()
 	text = regexp.MustCompile("\\r\\n").ReplaceAllLiteralString(text, "\n")
 	text = regexp.MustCompile("\\s{2,}").ReplaceAllLiteralString(text, " ")
+	text = regexp.MustCompile("^\\s").ReplaceAllLiteralString(text, "")
+	text = regexp.MustCompile("\\s$").ReplaceAllLiteralString(text, "")
 
 	mediaIds := make([]int64, 0)
 
@@ -478,14 +482,14 @@ func CreateTootWeibo(url string, item *gofeed.Item, client *mastodon.Client, ctx
 
 		if width*height != 0 {
 			if height/width > 1920/720 {
-				text += "\n📃" + *shortUrl + filedesc
+				meta += "\n📃" + *shortUrl + filedesc
 				continue
 			}
 		}
 		if friendMime == "GIF" {
-			text += "\n💈️" + *shortUrl + filedesc
+			meta += "\n💈️" + *shortUrl + filedesc
 		} else {
-			text += "\n🏞️" + *shortUrl + filedesc
+			meta += "\n🏞️" + *shortUrl + filedesc
 		}
 
 		if len(mediaIds) == 4 {
@@ -510,17 +514,28 @@ func CreateTootWeibo(url string, item *gofeed.Item, client *mastodon.Client, ctx
 	if err != nil {
 		return nil, err
 	}
-	text += "\n🔗" + *link
+	meta += "\n🔗" + *link
 
 	loc, err := time.LoadLocation("Asia/Shanghai")
 	if err != nil {
 		return nil, err
 	}
 
-	text += "\n⏰" + item.PublishedParsed.In(loc).Format("2006-01-02 15:04:05")
+	meta += "\n⏰" + item.PublishedParsed.In(loc).Format("2006-01-02 15:04:05")
+
+	stripped := false
+	for utf8.RuneCountInString(text + meta) > 490 {
+		_, size := utf8.DecodeLastRuneInString(text)
+		text = text[:len(text)-size]
+		stripped = true
+	}
+
+	if stripped {
+		text += "📶（…)📶"
+	}
 
 	return &mastodon.Toot{
-		Status:     text,
+		Status:     text + meta,
 		MediaIDs:   mediaIds,
 		Visibility: "unlisted",
 	}, nil
