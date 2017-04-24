@@ -429,6 +429,8 @@ func CreateTootWeibo(url string, item *gofeed.Item, client *mastodon.Client, ctx
 			return nil, err
 		}
 
+		defer os.Remove(tmp)
+
 		fmt.Printf("Downloaded Image to temp file: %s\n", tmp)
 
 		mime := http.DetectContentType(data)
@@ -452,9 +454,20 @@ func CreateTootWeibo(url string, item *gofeed.Item, client *mastodon.Client, ctx
 		if friendMime == "" {
 			friendMime = mime
 		}
-
 		filesize := len(data)
-		filedesc := " (" + humanize.BigIBytes(big.NewInt(int64(filesize))) + ", " + friendMime + ")"
+
+		descs := make([]string, 0)
+		if filesize >= 1*1024*1024 {
+			descs = append(descs, humanize.BigIBytes(big.NewInt(int64(filesize))))
+		}
+		if friendMime != "JPEG" {
+			descs = append(descs, friendMime)
+		}
+
+		filedesc := ""
+		if len(descs) > 0 {
+			filedesc = " (" + strings.Join(descs, ", ") + ")"
+		}
 
 		width, height := getImageDimension(tmp)
 
@@ -470,22 +483,18 @@ func CreateTootWeibo(url string, item *gofeed.Item, client *mastodon.Client, ctx
 			continue
 		}
 
-		if filesize > 6*1024*1024 {
+		if filesize >= 6*1024*1024 {
 			continue
 		}
 
 		attach, err := client.UploadMedia(*ctx, tmp)
 		if err != nil {
-			return nil, err
+			ReportError(err)
+			continue
 		}
 
 		fmt.Printf("Uploaded Attachment: %#v\n", attach)
 		mediaIds = append(mediaIds, attach.ID)
-
-		err = os.Remove(tmp)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	link, err := CreateGUIDWeibo(url, item)
