@@ -1,12 +1,16 @@
-hash: e28e2c05cb83327223afa29c6f727d8a984bed4c9ff86586c37ee9cc55c46725
-updated: 2017-04-24T03:00:53.1421095+08:00
+hash: cf4d1f487a00157a452d4e328c0b9b9fee659a505355cfad2febc1090d376c1e
+updated: 2017-04-24T16:55:32.006723+08:00
 imports:
 - name: github.com/andybalholm/cascadia
   version: 349dd0209470eabd9514242c688c403c0926d266
+- name: github.com/dustin/go-humanize
+  version: 259d2a102b871d17f30e3cd9881a642961a1e486
 - name: github.com/fabioberger/airtable-go
   version: 30a124a2d55f19dd37360b0590c7d3a8cae62116
   subpackages:
   - utils
+- name: github.com/getsentry/raven-go
+  version: b68337dbf03e7fbb53d9fd9b63fd09b28e8f13f7
 - name: github.com/jmcvetta/randutil
   version: 2bb1b664bcff821e02b2a0644cd29c7e824d54f8
 - name: github.com/knq/baseconv

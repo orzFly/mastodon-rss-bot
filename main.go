@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
+	"github.com/dustin/go-humanize"
 	"github.com/fabioberger/airtable-go"
+	"github.com/getsentry/raven-go"
 	"github.com/jmcvetta/randutil"
 	"github.com/knq/baseconv"
 	"github.com/mattn/go-mastodon"
@@ -17,11 +19,14 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io/ioutil"
+	"log"
+	"math/big"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
 	"os"
 	"regexp"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -58,6 +63,9 @@ type Bot struct {
 }
 
 func main() {
+	ravenDSN := os.Getenv("RAVEN_DSN")
+	raven.SetDSN(ravenDSN)
+
 	airtableAPIKey := os.Getenv("AIRTABLE_API_KEY")
 	baseID := os.Getenv("AIRTABLE_BASE_ID")
 
@@ -81,6 +89,12 @@ func main() {
 	}
 
 	fmt.Printf("Hello, world.\n")
+}
+
+func ReportError(err error) {
+	raven.CaptureErrorAndWait(err, nil)
+	log.Print(err)
+	debug.PrintStack()
 }
 
 func (bot *Bot) Process() map[string]interface{} {
@@ -193,15 +207,18 @@ func (bot *Bot) Process() map[string]interface{} {
 		}
 
 		if bot.Fields.CleanAndReset {
-			status, err := c.GetAccountStatuses(ctx, account.ID)
-			if err != nil {
-				panic(err)
-			}
-
-			for _, item := range status {
-				err := c.DeleteStatus(ctx, item.ID)
+			for {
+				status, err := c.GetAccountStatuses(ctx, account.ID)
 				if err != nil {
 					panic(err)
+				}
+
+				if len(status) == 0 {
+					break
+				}
+
+				for _, item := range status {
+					c.DeleteStatus(ctx, item.ID)
 				}
 			}
 
@@ -229,9 +246,11 @@ func (bot *Bot) Process() map[string]interface{} {
 			lastGuids := strings.Split(bot.Fields.RSSLastGUIDs, "||||")
 
 			for _, item := range feed.Items {
+				fmt.Printf("Processing Item: %s\n", item.GUID)
 				thisGuid, err := CreateGUID(bot.Fields.RSSUrl, item)
 				if err != nil {
-					panic(err)
+					ReportError(err)
+					break
 				}
 
 				if stringInSlice(*thisGuid, lastGuids) {
@@ -239,19 +258,21 @@ func (bot *Bot) Process() map[string]interface{} {
 					continue
 				}
 				fmt.Printf("New Item: %s\n", *thisGuid)
-				lastGuids = append(lastGuids, *thisGuid)
 
 				toot, err := CreateToot(bot.Fields.RSSUrl, item, c, &ctx)
 				if err != nil {
-					panic(err)
+					ReportError(err)
+					break
 				}
 				fmt.Printf("Generated Toot: %#v\n", toot)
 
 				_, err = c.PostStatus(ctx, toot)
 				if err != nil {
-					panic(err)
+					ReportError(err)
+					break
 				}
 
+				lastGuids = append(lastGuids, *thisGuid)
 				bot.Fields.LastPostedAt = time.Now().UTC().Format(time.RFC3339)
 				updatedFields["LastPostedAt"] = bot.Fields.LastPostedAt
 			}
@@ -306,18 +327,26 @@ func CreateGUID(url string, item *gofeed.Item) (*string, error) {
 
 func WeiboMid2Murl(mid string) (*string, error) {
 	fullmid := leftPad2Len(mid, "0", 7*3)
+
 	p1, err := baseconv.Convert(fullmid[0:7], baseconv.DigitsDec, baseconv.Digits62)
 	if err != nil {
 		return nil, err
 	}
+
 	p2, err := baseconv.Convert(fullmid[7:14], baseconv.DigitsDec, baseconv.Digits62)
 	if err != nil {
 		return nil, err
 	}
+
 	p3, err := baseconv.Convert(fullmid[14:21], baseconv.DigitsDec, baseconv.Digits62)
 	if err != nil {
 		return nil, err
 	}
+
+	p1 = leftPad2Len(p1, "0", 4)
+	p2 = leftPad2Len(p2, "0", 4)
+	p3 = leftPad2Len(p3, "0", 4)
+
 	result := regexp.MustCompile(`^0+`).ReplaceAllLiteralString(p1+p2+p3, "")
 	return &result, nil
 }
@@ -402,17 +431,46 @@ func CreateTootWeibo(url string, item *gofeed.Item, client *mastodon.Client, ctx
 
 		fmt.Printf("Downloaded Image to temp file: %s\n", tmp)
 
+		mime := http.DetectContentType(data)
+		friendlyMimes := map[string]string{
+			"image/x-icon":    "ICO",
+			"image/bmp":       "BMP",
+			"image/gif":       "GIF",
+			"image/webp":      "WEBP",
+			"image/png":       "PNG",
+			"image/jpeg":      "JPEG",
+			"application/ogg": "OGG",
+			"audio/aiff":      "AIFF",
+			"audio/midi":      "MIDI",
+			"audio/mpeg":      "MP3",
+			"audio/wave":      "WAV",
+			"video/avi":       "AVI",
+			"video/mp4":       "MP4",
+			"video/webm":      "WEBM",
+		}
+		friendMime := friendlyMimes[mime]
+		if friendMime == "" {
+			friendMime = mime
+		}
+
+		filesize := len(data)
+		filedesc := " (" + humanize.BigIBytes(big.NewInt(int64(filesize))) + ", " + friendMime + ")"
+
 		width, height := getImageDimension(tmp)
 
 		if width*height != 0 {
 			if height/width > 1920/720 {
-				text += "\n📜" + *shortUrl
+				text += "\n📜" + *shortUrl + filedesc
 				continue
 			}
 		}
-		text += "\n🖼️" + *shortUrl
+		text += "\n🖼️" + *shortUrl + filedesc
 
 		if len(mediaIds) == 4 {
+			continue
+		}
+
+		if filesize > 6*1024*1024 {
 			continue
 		}
 

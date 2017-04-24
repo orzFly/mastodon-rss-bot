@@ -20,3 +20,5 @@ import:
   - encoding
   - transform
 - package: github.com/knq/baseconv
+- package: github.com/dustin/go-humanize
+- package: github.com/getsentry/raven-go
