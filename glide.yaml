@@ -22,3 +22,5 @@ import:
 - package: github.com/knq/baseconv
 - package: github.com/dustin/go-humanize
 - package: github.com/getsentry/raven-go
+- package: github.com/certifi/gocertifi
+  version: 2017.04.17

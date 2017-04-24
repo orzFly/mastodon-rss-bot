@@ -1,8 +1,10 @@
-hash: cf4d1f487a00157a452d4e328c0b9b9fee659a505355cfad2febc1090d376c1e
-updated: 2017-04-24T16:55:32.006723+08:00
+hash: 51781aabc8f9f07a63bd922d5318ffd7783dc14c7b7230c13b1088ea39559fa2
+updated: 2017-04-24T17:15:09.5346869+08:00
 imports:
 - name: github.com/andybalholm/cascadia
   version: 349dd0209470eabd9514242c688c403c0926d266
+- name: github.com/certifi/gocertifi
+  version: a9c833d2837d3b16888d55d5aafa9ffe9afb22b0
 - name: github.com/dustin/go-humanize
   version: 259d2a102b871d17f30e3cd9881a642961a1e486
 - name: github.com/fabioberger/airtable-go
