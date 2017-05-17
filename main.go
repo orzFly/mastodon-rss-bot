@@ -89,7 +89,7 @@ func main() {
 		}
 	}
 
-	fmt.Printf("Hello, world.\n")
+	fmt.Printf("Done.\n")
 }
 
 func ReportError(err error) {
@@ -105,7 +105,7 @@ func (bot *Bot) Process() map[string]interface{} {
 		return updatedFields
 	}
 
-	fmt.Printf("Bot Status Fetched: %#v\n", bot)
+	fmt.Printf("Processing bot: %s <%s@%s>\n", bot.Fields.BotName, bot.Fields.BotUsername, bot.Fields.BotInstance)
 
 	if bot.Fields.BotApplicationClientId == "" {
 		app, err := mastodon.RegisterApp(ctx, &mastodon.AppConfig{
@@ -247,25 +247,27 @@ func (bot *Bot) Process() map[string]interface{} {
 			lastGuids := strings.Split(bot.Fields.RSSLastGUIDs, "||||")
 
 			for _, item := range feed.Items {
-				fmt.Printf("Processing Item: %s\n", item.GUID)
+				//fmt.Printf("Processing Item: %s\n", item.GUID)
 				thisGuid, err := CreateGUID(bot.Fields.RSSUrl, item)
 				if err != nil {
+					fmt.Printf("Failed processing item: %s\n", item.GUID)
 					ReportError(err)
 					break
 				}
 
 				if stringInSlice(*thisGuid, lastGuids) {
-					fmt.Printf("Duplicated Item: %s\n", *thisGuid)
+					// fmt.Printf("Duplicated Item: %s\n", *thisGuid)
 					continue
 				}
 				fmt.Printf("New Item: %s\n", *thisGuid)
 
 				toot, err := CreateToot(bot.Fields.RSSUrl, item, c, &ctx)
 				if err != nil {
+					fmt.Printf("Failed creating toot: %s %2\n", item.GUID, *thisGuid)
 					ReportError(err)
 					break
 				}
-				fmt.Printf("Generated Toot: %#v\n", toot)
+				// fmt.Printf("Generated Toot: %#v\n", toot)
 
 				_, err = c.PostStatus(ctx, toot)
 				if err != nil {
@@ -300,7 +302,9 @@ func (bot *Bot) Process() map[string]interface{} {
 		}
 	}
 
-	fmt.Printf("Bot Status Update: %#v\n", updatedFields)
+	//fmt.Printf("Bot Status Update: %#v\n", updatedFields)
+	//fmt.Printf("Finished process bot: %s <%s@%s>\n", bot.Fields.BotName, bot.Fields.BotUsername, bot.Fields.BotInstance)
+
 	return updatedFields
 }
 
